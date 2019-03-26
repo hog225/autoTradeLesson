@@ -15,8 +15,32 @@ def getStockCode(market):
 
     return df
 
+def getStockPrice(market, companyName = ''):
+
+    csv_file_name = market + '.csv'
+    try:
+        df = pd.read_csv(csv_file_name)
+    except:
+        print ('invalid market')
+        return
+    df_nameAndCode = df[['회사명', '종목코드']]
+
+    if companyName == '':
+        for idx, data in df_nameAndCode.iterrows():
+            print(data['회사명'])
+            
+    else:
+        try:
+            idx = df_nameAndCode['회사명'].tolist().index(companyName)
+            print(df_nameAndCode['종목코드'][idx])
+        except:
+            print ('invalid Company Name')
+            return
+
 
 if __name__ == '__main__':
-    result_df = getStockCode('kospi')
-    result_df.to_csv('kospi.csv')
-    print(result_df[['회사명', '종목코드']])
+    #result_df = getStockCode('kospi')
+    #result_df.to_csv('kospi.csv')
+    #print(result_df[['회사명', '종목코드']])
+
+    getStockPrice('kospi')
