@@ -7,6 +7,8 @@ class KiwoomAPIWdget(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
+        self.pwindow = parent
+        self.qle_text = ''
         # 라벨 생성
         label_market = QLabel('장 선택 ', self)
         #label_market.move(10, 70)
@@ -21,42 +23,72 @@ class KiwoomAPIWdget(QWidget):
 
         # 버튼 생성
         btn_market = QPushButton('장 리스트 가져오기', self)
-        btn_market.setToolTip('0: 장내, 10: 코스닥, 50: 코넥스 등등등 Spec 참조 ')
+        btn_market.setToolTip('0: 장내, 10: 코스닥, 50: 코넥스 등등등 Spec 참조 KiwoomAPI 장 별 종목코드를 가져옴')
         #btn_market.resize(200, 32)
         #btn_market.move(300, 70)
         btn_market.clicked.connect(self.on_click_market)
 
         hbox = QHBoxLayout()
-        hbox.addStretch(1)
+        hbox.setSpacing(50)
         hbox.addWidget(label_market)
-        hbox.addStretch(1)
         hbox.addWidget(self.cbox_market)
         hbox.addWidget(btn_market)
         hbox.addStretch(1)
 
+        box_sp = self.UIStockPrice()
+
         vbox = QVBoxLayout()
-        vbox.addStretch(1)
         vbox.addLayout(hbox)
+        vbox.addLayout(box_sp)
         vbox.addStretch(1)
 
         self.setLayout(vbox)
+
+    def UIStockPrice(self):
+        # 라벨 생성
+        lb_sp = QLabel('종목 코드 입력 ', self)
+
+
+        # 콤보 박스 생성
+        self.qle_sp = QLineEdit(self)
+        self.qle_sp.textChanged[str].connect(self.on_change_qle_sp)
+
+        # 버튼 생성
+        btn_sp = QPushButton('주가 가져오기', self)
+        btn_sp.setToolTip('해당 종목 코드의 주가를 가져옴')
+        btn_sp.clicked.connect(self.on_click_btn_sp)
+
+        hbox = QHBoxLayout()
+        hbox.setSpacing(50)
+        hbox.addWidget(lb_sp)
+        hbox.addWidget(self.qle_sp)
+        hbox.addWidget(btn_sp)
+        hbox.addStretch(1)
+        return hbox
 
 
     def on_click_market(self):
         print(self.cbox_market.currentText(), ' ',self.cbox_market.currentData())
         # GetCodeListByMarket 으로 종목코드 요청
-        result = self.kiwoom.dynamicCall('GetCodeListByMarket(QString)', str(self.cbox_market.currentData()))
+        result = self.pwindow.kiwoom.dynamicCall('GetCodeListByMarket(QString)', str(self.cbox_market.currentData()))
         code_list = result.split(';')
         data_list = []
 
         for code in code_list:
-            name = self.kiwoom.dynamicCall('GetMasterCodeName(QString)', code)
+            name = self.pwindow.kiwoom.dynamicCall('GetMasterCodeName(QString)', code)
             data_list.append([name, code])
 
         # 데이터 프레임으로 만들기
         df = pd.DataFrame(data_list, columns=['회사명', '종목코드'])
         print(df.head())
 
+    def on_click_btn_sp(self):
+        print(self.qle_text)
+        pass
+
+    def on_change_qle_sp(self):
+        self.qle_text = self.qle_sp.text()
+        pass
 
 class KiwoomAPIWindow(QMainWindow):
     def __init__(self, connect=1):
