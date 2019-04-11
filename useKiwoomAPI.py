@@ -36,10 +36,13 @@ class KiwoomAPIWdget(QWidget):
         hbox.addStretch(1)
 
         box_sp = self.UIStockPrice()
+        box_sc = self.UISearchStockCode()
 
         vbox = QVBoxLayout()
         vbox.addLayout(hbox)
+        vbox.addLayout(box_sc)
         vbox.addLayout(box_sp)
+
         vbox.addStretch(1)
 
         self.setLayout(vbox)
@@ -66,6 +69,28 @@ class KiwoomAPIWdget(QWidget):
         hbox.addStretch(1)
         return hbox
 
+    def UISearchStockCode(self):
+        # 라벨 생성
+        lb_sc = QLabel('회사명 입력 ', self)
+
+
+        # 콤보 박스 생성
+        self.qle_sc = QLineEdit(self)
+        self.qle_sc.textChanged[str].connect(self.on_change_qle_sc)
+
+        # 버튼 생성
+        btn_sc = QPushButton('종목 코드 가져오기', self)
+        btn_sc.setToolTip('해당 종목 코드를 가져옴, csv 파일이 존재 해야함')
+        btn_sc.clicked.connect(self.on_click_btn_sc)
+
+        hbox = QHBoxLayout()
+        hbox.setSpacing(50)
+        hbox.addWidget(lb_sc)
+        hbox.addWidget(self.qle_sc)
+        hbox.addWidget(btn_sc)
+        hbox.addStretch(1)
+        return hbox
+
 
     def on_click_market(self):
         print(self.cbox_market.currentText(), ' ',self.cbox_market.currentData())
@@ -87,6 +112,14 @@ class KiwoomAPIWdget(QWidget):
         pass
 
     def on_change_qle_sp(self):
+        self.qle_text = self.qle_sp.text()
+        pass
+
+    def on_click_btn_sc(self):
+        print(self.qle_text)
+        pass
+
+    def on_change_qle_sc(self):
         self.qle_text = self.qle_sp.text()
         pass
 
