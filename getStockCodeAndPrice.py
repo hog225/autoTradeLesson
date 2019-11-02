@@ -70,10 +70,10 @@ def getStockPrice(market, companyNameList = []):
 
 
 if __name__ == '__main__':
-    # result_df = getStockCode('kospi')
-    # result_df.to_csv('kospi.csv')
+    result_df = getStockCode('kospi')
+    result_df.to_csv('kospi.csv')
     # result_df = getStockCode('kosdaq')
     # result_df.to_csv('kosdaq.csv')
 
     # getStockPrice('kosdaq') # 전체 kospi 주가를 가져옴
-    getStockPrice('kospi', ['신세계', '삼성전자'])# List 안의 종목만 가져옴
+    # getStockPrice('kospi', ['신세계', '삼성전자'])# List 안의 종목만 가져옴
