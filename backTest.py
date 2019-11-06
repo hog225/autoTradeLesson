@@ -7,17 +7,30 @@ import requests
 import xml.etree.ElementTree as ET
 import datetime
 
-JONBER = 1  #1차
-MACD = 3    #1차
-RSI = 4     #1차
-STOCH = 5   #1차
+JONBER = 1
+MACD = 3
+RSI = 4
+STOCH = 5
 
 BUY = 2.0
 SELL = -2.0
 
+# 네이버에서 주가를 크롤링 하는 함수
+def getStockValueFromNaverWithDate(stock_code, start, end):
 
-def getStockValueFromNaver(stock_code, reqtype, count= 14531, date=None):
-    url = 'https://fchart.stock.naver.com/sise.nhn?symbol=%s&timeframe=day&startTime=20021101&count=%d&requestType=%d' % (stock_code, count, reqtype)
+    try:
+        startDate = datetime.datetime.strptime(start, "%Y%m%d").date()
+        endDate = datetime.datetime.strptime(end, "%Y%m%d").date()
+    except:
+        print("invalid date format ")
+        return []
+
+    count = (endDate - startDate).days
+    if count < 0:
+        print("invalid Start, End Date")
+        return []
+    url = 'https://fchart.stock.naver.com/sise.nhn?symbol=%s&timeframe=day&startTime=%s&count=%d&requestType=%d' % (stock_code, end, count, 2)
+    print(url)
     r = requests.get(url)
     root = ET.fromstring(r.text)
 
@@ -30,8 +43,14 @@ def getStockValueFromNaver(stock_code, reqtype, count= 14531, date=None):
         df_new = pd.DataFrame([stockVal], columns=['Date', 'Open', 'High', 'Low','AdjClose', 'Volume', 'Close'])
         df_org = df_org.append(df_new, ignore_index=True, sort= False)
 
+    # 유효한 날짜의 주가만 추출
+    df_org = df_org[(df_org.Date >= startDate) & (df_org.Date <= endDate)]
+    # STR 데이터를 숫자 타입으로 변환
+    df_org[["Open", "High", "Low", "AdjClose", "Volume"]] = df_org[
+        ["Open", "High", "Low", "AdjClose", "Volume"]].apply(pd.to_numeric)
     return df_org
 
+# se_line1, se_line2 의 Gold Cross 와 Dead Cross를 구한다.
 def getGoldDeadPosition(se_line1, se_line2):
     se_signal = np.sign(se_line1 - se_line2)
     se_signal[se_signal == 0] = 1
@@ -39,8 +58,9 @@ def getGoldDeadPosition(se_line1, se_line2):
     # 2, -2 로 구성된 시리즈
     return se_signal
 
+
 def getGoldDeadLineBoundaryPosition(se_signal, base_signal, buy_line, sell_line):
-    # slowd 중 기준라인 사이의 값은 영으로 만든다
+    # 두개의 시그널 선 중 기준라인 사이의 값은 영으로 만든다
     if buy_line != sell_line:
         se_signal.loc[(base_signal > buy_line) & (base_signal < sell_line)] = 0
         # BUY LINE 밑에있는 매도 신호는 지운다
@@ -56,6 +76,7 @@ def getGoldDeadLineBoundaryPosition(se_signal, base_signal, buy_line, sell_line)
     # testDf = pd.DataFrame({'A':se_signal, 'B':slowd, 'C':tmp_se_signal})
     return se_signal
 
+# 기술적 분석에 따른 트레이드 포지션을 잡는 코드
 def getTradePointFromMomentum(tech_anal_code, df_stock_val):
     base_line = []
     df_stock_val['trade'] = 0
@@ -116,9 +137,10 @@ def getTradePointFromMomentum(tech_anal_code, df_stock_val):
 
     print('Trade List : ')
     print(df_stock_val['trade'][df_stock_val['trade'] != 0.0])
+    print('-------------------------------------')
     return df_stock_val, base_line
 
-def makeResultData(df_stock_val, balance):
+def doTrading(df_stock_val, balance):
     buyList = []
     sellList = []
 
@@ -139,7 +161,7 @@ def makeResultData(df_stock_val, balance):
     beforeIdx = first_buy_idx
     #for idx, value in se_trade.loc[first_buy_idx:].items():
     se_idx_list = se_trade.loc[first_buy_idx:].index
-    print(se_idx_list)
+    #print(se_idx_list)
     for idx, realIdx in enumerate(se_idx_list):
 
         if idx == 0 or \
@@ -148,12 +170,12 @@ def makeResultData(df_stock_val, balance):
 
             stock_count = math.floor(balance / df_stock_val.loc[realIdx].AdjClose)
             balance -= stock_count * df_stock_val.loc[realIdx].AdjClose
-            print('buy ', 'Before Trade IDX ', beforeIdx, 'Current Trade IDX: ', realIdx, 'Stock Price: ', df_stock_val.loc[realIdx].AdjClose,
-                  'Stock Count : ', stock_count, 'balance: ', balance)
+            #print('buy ', 'Before Trade IDX ', beforeIdx, 'Current Trade IDX: ', realIdx, 'Stock Price: ', df_stock_val.loc[realIdx].AdjClose,
+            #      'Stock Count : ', stock_count, 'balance: ', balance)
             if idx == len(se_idx_list) - 1:
                 df_stock_val.loc[realIdx: , ['Balance', 'Asset', 'StockCount']] = \
                     balance, balance + (df_stock_val.loc[realIdx:]['AdjClose']* stock_count), stock_count
-                print('end BUY')
+                #print('end BUY')
             else:
                 next_idx = idx + 1
                 for remain_idx in range(idx+1, len(se_idx_list)):
@@ -169,7 +191,7 @@ def makeResultData(df_stock_val, balance):
                 else:
                     df_stock_val.loc[realIdx:se_idx_list[next_idx], ['Balance', 'Asset', 'StockCount']] = \
                         balance, balance + (df_stock_val.loc[realIdx:se_idx_list[next_idx]]['AdjClose'] * stock_count), stock_count
-                print('NOW BUY NEXT Trade IDX ', next_idx)
+                # print('NOW BUY NEXT Trade IDX ', next_idx)
             buyList.append([
                 df_stock_val.loc[realIdx].Date.strftime("%Y-%m-%d"),
                 df_stock_val.loc[realIdx].AdjClose
@@ -185,12 +207,12 @@ def makeResultData(df_stock_val, balance):
             balance += stock_count * df_stock_val.loc[realIdx].AdjClose
             asset = balance
             stock_count = 0
-            print('sell ', 'Before Trade IDX ', beforeIdx, 'Current Trade IDX: ', realIdx, 'Stock Price: ',
-                  df_stock_val.loc[realIdx].AdjClose, 'Stock Count : ', stock_count, 'balance: ', balance)
+            # print('sell ', 'Before Trade IDX ', beforeIdx, 'Current Trade IDX: ', realIdx, 'Stock Price: ',
+            #       df_stock_val.loc[realIdx].AdjClose, 'Stock Count : ', stock_count, 'balance: ', balance)
             if idx == len(se_idx_list) - 1:
                 df_stock_val.loc[realIdx:, ['Balance', 'Asset', 'StockCount']] = \
                     balance, asset, stock_count
-                print('end SELL')
+                # print('end SELL')
             else:
                 next_idx = idx + 1
                 for remain_idx in range(idx+1, len(se_idx_list)):
@@ -204,7 +226,7 @@ def makeResultData(df_stock_val, balance):
                 else:
                     df_stock_val.loc[realIdx:se_idx_list[next_idx], ['Balance', 'Asset', 'StockCount']] = \
                         balance, asset, stock_count
-                print('NOW SELL NEXT Trade IDX ', next_idx)
+                # print('NOW SELL NEXT Trade IDX ', next_idx)
             sellList.append([
                 df_stock_val.loc[realIdx].Date.strftime("%Y-%m-%d"),
                 df_stock_val.loc[realIdx].AdjClose
@@ -212,8 +234,8 @@ def makeResultData(df_stock_val, balance):
 
             beforeIdx = realIdx
 
-    print(df_stock_val.head(3))
-    print(df_stock_val.tail(3))
+    print(df_stock_val[['Date', 'Open', 'High', 'Low','AdjClose']].head(3))
+    print(df_stock_val[['Date', 'Open', 'High', 'Low','AdjClose']].tail(3))
 
     # for i in df_stock_val['Asset'].iteritems():
     #     print(i)
@@ -230,12 +252,16 @@ def getInvestPeriod(startDate, EndDate):
 
     return period_str
 
-def main(stockCode, techAnalCode, balance, count):
-    df_stock_val = getStockValueFromNaver(stockCode, 0, count=count)
-    # STR 데이터를 숫자 타입으로 변환
-    df_stock_val[["Open", "High", "Low", "AdjClose", "Volume"]] = df_stock_val[["Open", "High", "Low", "AdjClose", "Volume"]].apply(pd.to_numeric)
+def main(stockCode, techAnalCode, balance, start, end):
+    # 네이버에서 주가를 가져옴
+    df_stock_val = getStockValueFromNaverWithDate(stockCode, start, end)
+    if len(df_stock_val) == 0:
+        return
+
+    # 기술적 분석에 따른 트레이드 포지션을 잡는 코드
     df_stock_val, base_line = getTradePointFromMomentum(techAnalCode, df_stock_val)
-    makeResultData(df_stock_val, balance)
+    # 백테스팅 진행
+    doTrading(df_stock_val, balance)
 
     org_asset = df_stock_val.iloc[0].Asset
     last_asset = df_stock_val.iloc[-1].Asset
@@ -246,9 +272,10 @@ def main(stockCode, techAnalCode, balance, count):
     print('초기 자산 : ', org_asset)
     print('마지막 자산 : ', last_asset)
     print('증가된 자산 : ', added_asset)
-    print('수익률 : ', final_yield)
+    print('수익률 : ', final_yield, '%')
     print('투자일시 : ', df_stock_val.iloc[0].Date, '~', df_stock_val.iloc[-1].Date)
     print('투자기간 : ', str_invest_period)
 
 if __name__ == '__main__':
-    main('005930', JONBER, 1000000, 500)
+    main('005930', MACD, 1000000, '20121001', '20171117')
+    #print(getStockValueFromNaverWithDate('005930', '20011001', '20021101'))
